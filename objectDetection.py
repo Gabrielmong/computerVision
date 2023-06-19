@@ -3,8 +3,37 @@ import cv2
 import numpy as np
 import time
 import os
-import tkinter as tk
 from tkinter import filedialog
+import customtkinter as ctk
+from PIL import Image
+from customtkinter import CTkImage
+
+ctk.set_appearance_mode("Dark")
+ctk.set_default_color_theme("dark-blue")
+
+root = ctk.CTk()
+root.title("Object Detection")
+root.resizable(False, False)
+root.geometry("1600x900")
+
+leftContainer = ctk.CTkFrame(root, width=180, height=900)
+leftContainer.pack(padx=10, pady=10, side=ctk.LEFT,
+                   fill=ctk.BOTH, expand=False)
+
+rightContainer = ctk.CTkFrame(root, width=1000, height=900)
+rightContainer.pack(padx=10, pady=10, side=ctk.RIGHT,
+                    fill=ctk.BOTH, expand=True)
+
+leftFrame = ctk.CTkFrame(leftContainer, width=180, height=900,
+                         fg_color=('#3d3d3d'))
+leftFrame.pack(side=ctk.LEFT, fill=ctk.BOTH, expand=True)
+rightFrame = ctk.CTkFrame(rightContainer, width=1000, height=900,
+                          fg_color=('#3d3d3d'))
+rightFrame.pack(side=ctk.RIGHT, fill=ctk.BOTH, expand=True)
+
+outputLabel = ctk.CTkLabel(rightFrame, text="", fg_color=('#3d3d3d'),
+                           height=900, width=1000)
+outputLabel.pack(side=ctk.TOP, fill=ctk.BOTH, expand=False)
 
 
 class Detector:
@@ -110,6 +139,11 @@ class Detector:
 
         (success, frame) = cap.read()
 
+        cv2Image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        cv2Image = Image.fromarray(cv2Image)
+        height, width = cv2Image.size
+        ctkImage = CTkImage(cv2Image, size=(width, height))
+
         startTime = time.time()
 
         while success:
@@ -125,14 +159,14 @@ class Detector:
 
             cv2.putText(frame, 'FPS: {:.2f}'.format(
                 fps), (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            cv2.imshow("Output, press Q to exit", frame)
+            cv2.imshow("Press Q to exit", frame)
 
             key = cv2.waitKey(1) & 0xFF
 
             if key == ord("q"):
                 break
 
-            if cv2.getWindowProperty("Output, press Q to exit", cv2.WND_PROP_VISIBLE) < 1:
+            if cv2.getWindowProperty("Press Q to exit", cv2.WND_PROP_VISIBLE) < 1:
                 break
 
             (success, frame) = cap.read()
@@ -143,20 +177,66 @@ class Detector:
         image = cv2.imread(imagePath)
         image = self.processFrame(image)
 
-        cv2.imshow("Output, press Q to exit", image)
+        cv2image = cv2.cvtColor(image, cv2.COLOR_BGR2RGBA)
+        img = Image.fromarray(cv2image)
 
-        while True:
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord("q"):
-                break
+        height, width = img.size
 
-            if cv2.getWindowProperty("Output, press Q to exit", cv2.WND_PROP_VISIBLE) < 1:
-                break
+        ctkImage = CTkImage(img, size=(width, height))
 
-        cv2.destroyAllWindows()
+        outputLabel.image = ctkImage
+        outputLabel.configure(image=ctkImage)
 
 
 def main():
+    def openVideo():
+        outputLabel.image = None
+        outputLabel.configure(
+            image=None,
+            text="Due to the limitations of the Tkinter library, and some performance issues, the video will not be displayed. Please check the pop-up window for the video.")
+
+        def openCamera():
+            detector = Detector(0, configPath, modelPath, classesPath)
+            detector.onVideo()
+
+        def openFile():
+            root.filename = filedialog.askopenfilename(
+                initialdir="/", title="Select file", filetypes=(("mp4 files", "*.mp4"), ("all files", "*.*")))
+            detector = Detector(root.filename, configPath,
+                                modelPath, classesPath)
+
+            detector.onVideo()
+
+        def backToMain():
+            for widget in leftFrame.winfo_children():
+                widget.destroy()
+
+            main()
+
+        for widget in leftFrame.winfo_children():
+            widget.destroy()
+
+        label = ctk.CTkLabel(leftFrame, text="Video Classification")
+        label.pack(pady=10, padx=50)
+
+        button1 = ctk.CTkButton(
+            leftFrame, text="Open Camera", command=openCamera)
+        button1.pack(pady=10, padx=50)
+
+        button2 = ctk.CTkButton(leftFrame, text="Open File", command=openFile)
+        button2.pack(pady=10, padx=50)
+
+        button3 = ctk.CTkButton(leftFrame, text="Back", command=backToMain)
+        button3.pack(pady=10, padx=50)
+
+    def openImage():
+        outputLabel.configure(
+            text="")
+
+        root.filename = filedialog.askopenfilename(
+            initialdir="/", title="Select file", filetypes=(("jpeg files", "*.jpg;*.jpeg"), ("all files", "*.*")))
+        detector.classifyImage(root.filename)
+
     os.system("cls")
     print("Object Detection using OpenCV")
     configPath = os.path.join(
@@ -166,54 +246,15 @@ def main():
 
     detector = Detector(None, configPath, modelPath, classesPath)
 
-    root = tk.Tk()
-    root.title("Object Detection")
-    root.geometry("300x70")
-    root.eval('tk::PlaceWindow . center')
-
-    def openVideo():
-        root.destroy()
-
-        root2 = tk.Tk()
-        root2.title("Video")
-        root2.geometry("300x70")
-        root2.eval('tk::PlaceWindow . center')
-
-        def openCamera():
-            detector = Detector(0, configPath, modelPath, classesPath)
-            detector.onVideo()
-
-        def openFile():
-            root2.filename = filedialog.askopenfilename(
-                initialdir="/", title="Select file", filetypes=(("mp4 files", "*.mp4"), ("all files", "*.*")))
-            detector = Detector(root2.filename,
-                                configPath, modelPath, classesPath)
-            detector.onVideo()
-
-        def backToMain():
-            root2.destroy()
-            main()
-
-        cameraButton = tk.Button(root2, text="Camera", command=openCamera)
-        cameraButton.pack()
-
-        fileButton = tk.Button(root2, text="File", command=openFile)
-        fileButton.pack()
-
-        root2.protocol("WM_DELETE_WINDOW", backToMain)
-
-        root2.mainloop()
-
-    def openImage():
-        root.filename = filedialog.askopenfilename(
-            initialdir="/", title="Select file", filetypes=(("jpeg files", "*.jpg;*.jpeg"), ("all files", "*.*")))
-        detector.classifyImage(root.filename)
-
-    videoButton = tk.Button(root, text="Video", command=openVideo)
-    videoButton.pack()
-
-    imageButton = tk.Button(root, text="Image", command=openImage)
-    imageButton.pack()
+    # left frame
+    label = ctk.CTkLabel(leftFrame, text="Object Detection using OpenCV")
+    label.pack(pady=10, padx=50)
+    button1 = ctk.CTkButton(leftFrame, text="Open Video", command=openVideo)
+    button1.pack(pady=10, padx=50)
+    button2 = ctk.CTkButton(leftFrame, text="Open Image", command=openImage)
+    button2.pack(pady=10, padx=50)
+    button3 = ctk.CTkButton(leftFrame, text="Exit", command=root.destroy)
+    button3.pack(pady=10, padx=50)
 
     root.mainloop()
 
